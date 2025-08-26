@@ -188,12 +188,13 @@ class TestSensorReadingRepository:
         assert created_reading.confidence == sample_reading.confidence
         assert created_reading.source_entity == sample_reading.source_entity
     
-    async def test_create_sensor_reading_error_handling(self, database_session: AsyncSession):
+    async def test_create_sensor_reading_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling during sensor reading creation."""
         repo = SensorReadingRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.commit to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'commit', side_effect=SQLAlchemyError("Simulated DB error"))
         
         sample_reading = sample_sensor_readings()[0]
         
@@ -230,13 +231,14 @@ class TestSensorReadingRepository:
         
         assert inserted_count == len(sample_readings)
     
-    async def test_bulk_create_error_handling(self, database_session: AsyncSession):
+    async def test_bulk_create_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling during bulk create."""
         repo = SensorReadingRepository(database_session)
         sample_readings = sample_sensor_readings()
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.commit to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'commit', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.bulk_create(sample_readings)
@@ -294,12 +296,13 @@ class TestSensorReadingRepository:
         
         assert len(readings) == 0
     
-    async def test_get_by_room_and_timerange_error_handling(self, database_session: AsyncSession):
+    async def test_get_by_room_and_timerange_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_by_room_and_timerange."""
         repo = SensorReadingRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_by_room_and_timerange(
@@ -335,12 +338,13 @@ class TestSensorReadingRepository:
         
         assert len(readings) <= 1
     
-    async def test_get_latest_by_room_error_handling(self, database_session: AsyncSession):
+    async def test_get_latest_by_room_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_latest_by_room."""
         repo = SensorReadingRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_latest_by_room(RoomType.BEDROOM)
@@ -409,12 +413,12 @@ class TestSensorReadingRepository:
         
         assert len(state_changes) == 0
     
-    async def test_get_state_changes_error_handling(self, database_session: AsyncSession):
+    async def test_get_state_changes_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_state_changes."""
         repo = SensorReadingRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock get_by_room_and_timerange to raise error
+        mocker.patch.object(repo, 'get_by_room_and_timerange', side_effect=Exception("Simulated error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_state_changes(
@@ -500,12 +504,12 @@ class TestSensorReadingRepository:
         
         assert len(gaps) == 0  # Can't detect gaps with less than 2 readings
     
-    async def test_detect_data_gaps_error_handling(self, database_session: AsyncSession):
+    async def test_detect_data_gaps_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in detect_data_gaps."""
         repo = SensorReadingRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock get_by_room_and_timerange to raise error
+        mocker.patch.object(repo, 'get_by_room_and_timerange', side_effect=Exception("Simulated error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.detect_data_gaps(
@@ -532,12 +536,13 @@ class TestRoomTransitionRepository:
         assert created_transition.transition_duration_seconds == sample_transition.transition_duration_seconds
         assert created_transition.confidence == sample_transition.confidence
     
-    async def test_create_room_transition_error_handling(self, database_session: AsyncSession):
+    async def test_create_room_transition_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling during room transition creation."""
         repo = RoomTransitionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.commit to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'commit', side_effect=SQLAlchemyError("Simulated DB error"))
         
         sample_transition = sample_room_transitions()[0]
         
@@ -585,12 +590,13 @@ class TestRoomTransitionRepository:
         for transition in transitions:
             assert transition.to_room == RoomType.BEDROOM
     
-    async def test_get_by_timerange_error_handling(self, database_session: AsyncSession):
+    async def test_get_by_timerange_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_by_timerange."""
         repo = RoomTransitionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_by_timerange(BASE_TIME, BASE_TIME + timedelta(hours=1))
@@ -633,12 +639,13 @@ class TestRoomTransitionRepository:
         assert "office" in patterns["bedroom"]
         assert patterns["bedroom"]["office"] == 2
     
-    async def test_get_transition_patterns_error_handling(self, database_session: AsyncSession):
+    async def test_get_transition_patterns_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_transition_patterns."""
         repo = RoomTransitionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_transition_patterns(BASE_TIME, BASE_TIME + timedelta(hours=1))
@@ -674,12 +681,13 @@ class TestPredictionRepository:
         
         assert created_prediction is not None
     
-    async def test_create_occupancy_prediction_error_handling(self, database_session: AsyncSession):
+    async def test_create_occupancy_prediction_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in create_occupancy_prediction."""
         repo = PredictionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.commit to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'commit', side_effect=SQLAlchemyError("Simulated DB error"))
         
         sample_prediction = sample_occupancy_predictions()[0]
         
@@ -713,12 +721,13 @@ class TestPredictionRepository:
         
         assert created_prediction is not None
     
-    async def test_create_vacancy_prediction_error_handling(self, database_session: AsyncSession):
+    async def test_create_vacancy_prediction_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in create_vacancy_prediction."""
         repo = PredictionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.commit to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'commit', side_effect=SQLAlchemyError("Simulated DB error"))
         
         sample_prediction = sample_vacancy_predictions()[0]
         
@@ -764,12 +773,13 @@ class TestPredictionRepository:
         for prediction in predictions:
             assert prediction.room == RoomType.BEDROOM
     
-    async def test_get_latest_occupancy_predictions_error_handling(self, database_session: AsyncSession):
+    async def test_get_latest_occupancy_predictions_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_latest_occupancy_predictions."""
         repo = PredictionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_latest_occupancy_predictions()
@@ -809,12 +819,13 @@ class TestPredictionRepository:
         for prediction in predictions:
             assert prediction.room == RoomType.BEDROOM
     
-    async def test_get_latest_vacancy_predictions_error_handling(self, database_session: AsyncSession):
+    async def test_get_latest_vacancy_predictions_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in get_latest_vacancy_predictions."""
         repo = PredictionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.get_latest_vacancy_predictions()
@@ -876,12 +887,13 @@ class TestPredictionRepository:
         
         assert deleted_count == 0  # No predictions to delete
     
-    async def test_cleanup_old_predictions_error_handling(self, database_session: AsyncSession):
+    async def test_cleanup_old_predictions_error_handling(self, database_session: AsyncSession, mocker):
         """Test error handling in cleanup_old_predictions."""
         repo = PredictionRepository(database_session)
         
-        # Force an error by closing the session
-        await database_session.close()
+        # Mock session.execute to raise database error
+        from sqlalchemy.exc import SQLAlchemyError
+        mocker.patch.object(database_session, 'execute', side_effect=SQLAlchemyError("Simulated DB error"))
         
         with pytest.raises(RepositoryException) as exc_info:
             await repo.cleanup_old_predictions()

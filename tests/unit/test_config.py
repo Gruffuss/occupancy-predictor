@@ -132,18 +132,15 @@ ENVIRONMENT=testing
             env_file_path = f.name
         
         try:
-            # Mock the model_config to use our test env file
-            with patch.object(Settings, 'model_config') as mock_config:
-                mock_config.env_file = env_file_path
+            # Don't patch model_config - just pass env file directly
+            # Clear environment to ensure we're loading from file  
+            with patch.dict(os.environ, {}, clear=True):
+                settings = Settings(_env_file=env_file_path)
                 
-                # Clear environment to ensure we're loading from file
-                with patch.dict(os.environ, {}, clear=True):
-                    settings = Settings(_env_file=env_file_path)
-                    
-                    assert settings.postgres_password == "env_file_password"
-                    assert settings.ha_url == "http://env-ha:8123"
-                    assert settings.log_level == "WARNING"
-                    assert settings.environment == "testing"
+                assert settings.postgres_password == "env_file_password"
+                assert settings.ha_url == "http://env-ha:8123"
+                assert settings.log_level == "WARNING"
+                assert settings.environment == "testing"
         finally:
             os.unlink(env_file_path)
     
