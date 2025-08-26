@@ -1,0 +1,1 @@
+"""Domain layer for occupancy prediction system."""

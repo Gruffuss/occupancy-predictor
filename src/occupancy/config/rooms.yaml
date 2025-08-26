@@ -1,0 +1,180 @@
+# Room configuration for occupancy prediction system
+# Defines all rooms, their zones, sensors, and prediction parameters
+
+rooms:
+  bedroom:
+    display_name: "Bedroom" 
+    type: "bedroom"
+    description: "Master bedroom with dual zones"
+    zones:
+      full:
+        display_name: "Full Room"
+        sensor_entity: "binary_sensor.bedroom_fp2_presence"
+        description: "Overall room occupancy detection"
+        priority: 1
+      anca_bed_side:
+        display_name: "Anca Bed Side"
+        sensor_entity: "binary_sensor.bedroom_fp2_anca_bed_side"
+        description: "Anca's side of the bed"
+        priority: 2
+      vladimir_bed_side:
+        display_name: "Vladimir Bed Side" 
+        sensor_entity: "binary_sensor.bedroom_fp2_vladimir_bed_side"
+        description: "Vladimir's side of the bed"
+        priority: 2
+    prediction_config:
+      occupancy_horizons: [15, 120]  # 15min cooling, 2hr heating
+      typical_occupancy_duration: 480  # 8 hours sleep
+      min_prediction_confidence: 0.6
+      cat_interference_likelihood: "high"
+
+  bathroom:
+    display_name: "Bathroom"
+    type: "bathroom"
+    description: "Main bathroom"
+    zones:
+      full:
+        display_name: "Full Room"
+        sensor_entity: "binary_sensor.bathroom_fp2_presence" 
+        description: "Overall bathroom occupancy"
+        priority: 1
+    prediction_config:
+      occupancy_horizons: [15, 120]
+      typical_occupancy_duration: 20  # 20 minutes typical
+      min_prediction_confidence: 0.7
+      cat_interference_likelihood: "low"
+
+  small_bathroom:
+    display_name: "Small Bathroom"
+    type: "small_bathroom" 
+    description: "Shower bathroom"
+    zones:
+      entrance:
+        display_name: "Entrance"
+        sensor_entity: "binary_sensor.small_bathroom_door_sensor"
+        description: "Door sensor only - no FP2 in shower area"
+        priority: 1
+    prediction_config:
+      occupancy_horizons: [15, 120]
+      typical_occupancy_duration: 15  # 15 minutes shower
+      min_prediction_confidence: 0.5  # Lower confidence due to door sensor only
+      cat_interference_likelihood: "none"
+
+  office:
+    display_name: "Office"
+    type: "office"
+    description: "Home office with dual desk zones"
+    zones:
+      full:
+        display_name: "Full Room"
+        sensor_entity: "binary_sensor.office_fp2_presence"
+        description: "Overall office occupancy"
+        priority: 1
+      anca_desk:
+        display_name: "Anca Desk"
+        sensor_entity: "binary_sensor.office_fp2_anca_desk"
+        description: "Anca's desk area"
+        priority: 2
+      vladimir_desk:
+        display_name: "Vladimir Desk"
+        sensor_entity: "binary_sensor.office_fp2_vladimir_desk"
+        description: "Vladimir's desk area"
+        priority: 2
+    prediction_config:
+      occupancy_horizons: [15, 120]
+      typical_occupancy_duration: 240  # 4 hours work sessions
+      min_prediction_confidence: 0.7
+      cat_interference_likelihood: "medium"
+
+  living_kitchen:
+    display_name: "Living Kitchen"
+    type: "living_kitchen"
+    description: "Open plan living room and kitchen area"
+    zones:
+      full:
+        display_name: "Full Area"
+        sensor_entity: "binary_sensor.living_fp2_presence"
+        description: "Overall living/kitchen area"
+        priority: 1
+      couch:
+        display_name: "Couch Area"
+        sensor_entity: "binary_sensor.living_fp2_couch"
+        description: "Living room seating area"
+        priority: 2
+      kitchen:
+        display_name: "Kitchen Area"
+        sensor_entity: "binary_sensor.living_fp2_kitchen"
+        description: "Kitchen workspace"
+        priority: 2
+      dining:
+        display_name: "Dining Area"
+        sensor_entity: "binary_sensor.living_fp2_dining"
+        description: "Dining table area"
+        priority: 2
+    prediction_config:
+      occupancy_horizons: [15, 120]
+      typical_occupancy_duration: 180  # 3 hours evening activities
+      min_prediction_confidence: 0.6
+      cat_interference_likelihood: "very_high"
+
+  guest_bedroom:
+    display_name: "Guest Bedroom"
+    type: "guest_bedroom"
+    description: "Guest room - rarely used (<5% occupancy)"
+    zones:
+      full:
+        display_name: "Full Room"
+        sensor_entity: "binary_sensor.guest_bedroom_fp2_presence"
+        description: "Overall guest room occupancy"
+        priority: 1
+    prediction_config:
+      occupancy_horizons: [15, 120]
+      typical_occupancy_duration: 600  # 10 hours when guests stay
+      min_prediction_confidence: 0.3  # Low confidence due to sparse data
+      cat_interference_likelihood: "high"
+
+# Global configuration
+global_config:
+  # Data quality thresholds
+  max_sensor_gap_minutes: 10
+  min_daily_readings: 100
+  
+  # Cat detection parameters
+  cat_movement_detection:
+    impossible_transition_seconds: 5
+    rapid_zone_change_seconds: 10
+    impossible_zone_combinations:
+      - ["anca_bed_side", "vladimir_bed_side"]
+      - ["anca_desk", "vladimir_desk"]
+  
+  # Prediction parameters
+  prediction_defaults:
+    max_latency_ms: 100
+    cache_duration_seconds: 300  # 5 minutes
+    fallback_probability: 0.5
+  
+  # Energy efficiency
+  hvac_integration:
+    cooling_lead_time_minutes: 15
+    heating_lead_time_minutes: 120
+    energy_savings_target_percent: 20
+
+# Home Assistant integration
+homeassistant:
+  # Sensor entity patterns
+  fp2_sensors:
+    presence_pattern: "binary_sensor.{room}_fp2_presence"
+    zone_pattern: "binary_sensor.{room}_fp2_{zone}"
+  
+  door_sensors:
+    pattern: "binary_sensor.{room}_door_sensor"
+  
+  # MQTT topics for predictions
+  mqtt:
+    discovery_prefix: "homeassistant"
+    state_topic_pattern: "occupancy/{room}/{prediction_type}"
+    
+  # Update frequencies
+  polling:
+    sensor_state_seconds: 30
+    prediction_update_seconds: 300

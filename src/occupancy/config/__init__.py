@@ -1,0 +1,1 @@
+"""Configuration layer for occupancy prediction system."""
