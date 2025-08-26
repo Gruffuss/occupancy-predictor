@@ -57,28 +57,32 @@ def get_database_engine(settings: Settings | None = None) -> AsyncEngine:
         try:
             database_url = get_database_url(settings)
             
-            # Engine configuration for resource-constrained environment
-            _engine = create_async_engine(
-                database_url,
-                # Connection pool settings optimized for 2 CPU cores, 6GB RAM
-                pool_size=5,  # Small pool size for limited resources
-                max_overflow=10,  # Allow some overflow
-                pool_timeout=30,  # 30 second timeout
-                pool_recycle=3600,  # Recycle connections after 1 hour
-                pool_pre_ping=True,  # Validate connections before use
-                # For testing, we might want to use NullPool
-                poolclass=NullPool if settings.environment == "test" else None,
-                # Echo SQL queries in development
-                echo=settings.log_level == "DEBUG",
-                # JSON serializer for better performance
-                json_serializer=lambda obj: obj,
-                # Connection arguments
-                connect_args={
+            # Base engine arguments
+            engine_args = {
+                "echo": settings.log_level == "DEBUG",
+                "json_serializer": lambda obj: obj,
+                "connect_args": {
                     "server_settings": {
                         "application_name": "occupancy_predictor",
                     },
                 },
-            )
+            }
+            
+            # Configure connection pool based on environment
+            if settings.environment == "test":
+                # Use NullPool for testing - no pool configuration needed
+                engine_args["poolclass"] = NullPool
+            else:
+                # Connection pool settings optimized for 2 CPU cores, 6GB RAM
+                engine_args.update({
+                    "pool_size": 5,  # Small pool size for limited resources
+                    "max_overflow": 10,  # Allow some overflow
+                    "pool_timeout": 30,  # 30 second timeout
+                    "pool_recycle": 3600,  # Recycle connections after 1 hour
+                    "pool_pre_ping": True,  # Validate connections before use
+                })
+            
+            _engine = create_async_engine(database_url, **engine_args)
             
             logger.info(
                 f"Created database engine for {settings.postgres_host}:"
