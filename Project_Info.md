@@ -432,7 +432,7 @@ tests/
 
 ### Definition of Done
 - [x] All models have strict typing
-- [ ] Database migrations run successfully
+- [x] Database migrations run successfully
 - [x] Repository tests pass with 100% coverage
 - [x] HA client handles connection errors gracefully
 - [ ] Integration tests use real database (not mocks)
