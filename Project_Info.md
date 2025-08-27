@@ -432,10 +432,10 @@ tests/
 
 ### Definition of Done
 - [x] All models have strict typing
-- [x] Database migrations run successfully (Alembic configured, migrations deferred to production)
+- [ ] Database migrations run successfully
 - [x] Repository tests pass with 100% coverage
 - [x] HA client handles connection errors gracefully
-- [x] Integration tests use real database (SQLite for test isolation)
+- [ ] Integration tests use real database (not mocks)
 
 ---
 
