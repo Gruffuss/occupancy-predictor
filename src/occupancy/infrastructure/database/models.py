@@ -21,7 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
-from src.occupancy.domain.models import (
+from occupancy.domain.models import (
     RoomType,
     SensorReading,
     RoomTransition,

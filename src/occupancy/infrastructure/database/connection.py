@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from src.occupancy.config.settings import Settings
-from src.occupancy.domain.exceptions import OccupancyDomainException
+from occupancy.config.settings import Settings
+from occupancy.domain.exceptions import OccupancyDomainException
 
 logger = logging.getLogger(__name__)
 

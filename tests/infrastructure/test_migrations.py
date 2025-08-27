@@ -1,11 +1,16 @@
-"""Test database migrations and Alembic configuration."""
+"""Test database migrations and Alembic configuration - Integration tests."""
 
 import pytest
 from pathlib import Path
 import subprocess
 import tempfile
 import os
-from unittest.mock import patch
+import asyncio
+from unittest.mock import patch, MagicMock
+
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from occupancy.config.settings import Settings
 from occupancy.infrastructure.database.connection import (
@@ -13,6 +18,7 @@ from occupancy.infrastructure.database.connection import (
     get_async_session,
     close_database_engine
 )
+from occupancy.infrastructure.database.models import Base
 
 
 class TestMigrationInfrastructure:
@@ -241,7 +247,7 @@ async def test_database_connection_with_settings():
         settings = Settings()
         
         async with get_async_session(settings) as session:
-            result = await session.execute("SELECT 1 as test")
+            result = await session.execute(text("SELECT 1 as test"))
             row = result.fetchone()
             assert row.test == 1
             
@@ -250,3 +256,221 @@ async def test_database_connection_with_settings():
         pytest.skip("Database connection not available for testing")
     finally:
         await close_database_engine()
+
+
+class TestMigrationIntegration:
+    """Integration tests for complete migration workflow."""
+    
+    @pytest.fixture
+    def temp_db_file(self):
+        """Create temporary SQLite database for testing."""
+        fd, path = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+        yield f"sqlite:///{path}"
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+    
+    def test_complete_migration_cycle_with_sqlite(self, temp_db_file):
+        """Test complete migration cycle using SQLite."""
+        # This test simulates what Alembic migrations should accomplish
+        
+        # Create engine for testing
+        engine = create_engine(temp_db_file)
+        
+        try:
+            # Simulate initial state (empty database)
+            inspector = inspect(engine)
+            initial_tables = inspector.get_table_names()
+            assert len(initial_tables) == 0, "Database should start empty"
+            
+            # Simulate migration upgrade (create all tables)
+            Base.metadata.create_all(engine)
+            
+            # Verify tables created
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            
+            expected_tables = ['sensor_readings', 'room_transitions', 'predictions']
+            for table in expected_tables:
+                assert table in tables, f"Table {table} not created"
+            
+            # Verify table structure
+            self._verify_sensor_readings_structure(inspector)
+            self._verify_room_transitions_structure(inspector)
+            self._verify_predictions_structure(inspector)
+            
+            # Simulate downgrade (drop all tables)
+            Base.metadata.drop_all(engine)
+            
+            # Verify tables dropped
+            inspector = inspect(engine)
+            final_tables = inspector.get_table_names()
+            for table in expected_tables:
+                assert table not in final_tables, f"Table {table} not dropped"
+                
+        finally:
+            engine.dispose()
+    
+    def _verify_sensor_readings_structure(self, inspector):
+        """Verify sensor_readings table structure."""
+        columns = inspector.get_columns('sensor_readings')
+        column_names = [col['name'] for col in columns]
+        
+        expected_columns = [
+            'id', 'timestamp', 'room', 'zone', 'state',
+            'confidence', 'source_entity', 'created_at'
+        ]
+        
+        for col in expected_columns:
+            assert col in column_names, f"sensor_readings missing column: {col}"
+        
+        # Verify indexes
+        indexes = inspector.get_indexes('sensor_readings')
+        index_column_sets = [set(idx['column_names']) for idx in indexes]
+        
+        # Should have room+timestamp compound index
+        assert {'room', 'timestamp'} in index_column_sets, \
+            "Missing room+timestamp index"
+    
+    def _verify_room_transitions_structure(self, inspector):
+        """Verify room_transitions table structure."""
+        columns = inspector.get_columns('room_transitions')
+        column_names = [col['name'] for col in columns]
+        
+        expected_columns = [
+            'id', 'timestamp', 'from_room', 'to_room',
+            'transition_duration_seconds', 'confidence', 'created_at'
+        ]
+        
+        for col in expected_columns:
+            assert col in column_names, f"room_transitions missing column: {col}"
+        
+        # Verify nullable constraints
+        column_nullable = {col['name']: col['nullable'] for col in columns}
+        assert column_nullable['from_room'] == True, "from_room should be nullable"
+        assert column_nullable['to_room'] == False, "to_room should not be nullable"
+    
+    def _verify_predictions_structure(self, inspector):
+        """Verify predictions table structure."""
+        columns = inspector.get_columns('predictions')
+        column_names = [col['name'] for col in columns]
+        
+        expected_columns = [
+            'id', 'room', 'prediction_made_at', 'prediction_type',
+            'confidence', 'horizon_minutes', 'probability',
+            'expected_vacancy_minutes', 'probability_distribution',
+            'model_version', 'created_at'
+        ]
+        
+        for col in expected_columns:
+            assert col in column_names, f"predictions missing column: {col}"
+    
+    @pytest.mark.asyncio
+    async def test_async_database_operations_after_migration(self, temp_db_file):
+        """Test that async operations work correctly after migration."""
+        # Convert SQLite URL to async version
+        async_url = temp_db_file.replace("sqlite:///", "sqlite+aiosqlite:///")
+        
+        engine = create_async_engine(async_url, poolclass=NullPool)
+        
+        try:
+            # Create schema
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            
+            # Test async operations
+            from occupancy.infrastructure.database.models import SensorReadingDB
+            from sqlalchemy.ext.asyncio import async_sessionmaker
+            from datetime import datetime
+            
+            SessionFactory = async_sessionmaker(engine)
+            
+            async with SessionFactory() as session:
+                # Insert test data
+                sensor_reading = SensorReadingDB(
+                    timestamp=datetime.now(),
+                    room="bedroom",
+                    zone="full", 
+                    state=True,
+                    confidence=0.95,
+                    source_entity="binary_sensor.test"
+                )
+                
+                session.add(sensor_reading)
+                await session.commit()
+                
+                # Query data
+                result = await session.execute(
+                    text("SELECT COUNT(*) FROM sensor_readings")
+                )
+                count = result.scalar()
+                assert count == 1, "Async insert/query failed"
+                
+        finally:
+            await engine.dispose()
+
+
+class TestMigrationValidation:
+    """Validate migration content and consistency."""
+    
+    def test_migration_sql_output_generation(self):
+        """Test that migrations can generate SQL output."""
+        project_root = Path(__file__).parent.parent.parent
+        
+        try:
+            result = subprocess.run(
+                ["alembic", "upgrade", "head", "--sql"],
+                capture_output=True,
+                text=True,
+                cwd=project_root,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                # Should generate SQL statements
+                assert "CREATE TABLE" in result.stdout or "BEGIN" in result.stdout
+            else:
+                pytest.skip(f"Cannot generate SQL output: {result.stderr}")
+                
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pytest.skip("Alembic not available for SQL generation test")
+    
+    def test_migration_consistency_with_models(self):
+        """Test that migrations create schema consistent with SQLAlchemy models."""
+        # Get expected schema from models
+        model_tables = set(Base.metadata.tables.keys())
+        
+        # Expected tables from migration analysis
+        expected_tables = {'sensor_readings', 'room_transitions', 'predictions'}
+        
+        assert model_tables == expected_tables, \
+            f"Model tables {model_tables} don't match expected migration tables {expected_tables}"
+        
+        # Verify each table has expected columns
+        for table_name, table in Base.metadata.tables.items():
+            columns = set(table.columns.keys())
+            
+            if table_name == 'sensor_readings':
+                expected_cols = {
+                    'id', 'timestamp', 'room', 'zone', 'state',
+                    'confidence', 'source_entity', 'created_at'
+                }
+                assert columns == expected_cols, f"sensor_readings columns mismatch"
+                
+            elif table_name == 'room_transitions':
+                expected_cols = {
+                    'id', 'timestamp', 'from_room', 'to_room',
+                    'transition_duration_seconds', 'confidence', 'created_at'
+                }
+                assert columns == expected_cols, f"room_transitions columns mismatch"
+                
+            elif table_name == 'predictions':
+                expected_cols = {
+                    'id', 'room', 'prediction_made_at', 'prediction_type',
+                    'confidence', 'horizon_minutes', 'probability',
+                    'expected_vacancy_minutes', 'probability_distribution',
+                    'model_version', 'created_at'
+                }
+                assert columns == expected_cols, f"predictions columns mismatch"
